@@ -1,53 +1,44 @@
 # baby-tracker
 
-A CLI tool to track baby feeding activity. Built with Rust.
+A PWA to track baby feeding activity. Rust core compiled to WebAssembly.
 
 ## Features
 
 - Track feedings: breast (left/right), bottle, and solid food
 - Record amount (ml), duration (minutes), and notes
-- List recent feedings in a formatted table
-- View feeding summaries and statistics
-- SQLite-backed persistent storage
+- View feeding history and summary statistics
+- Installable as a PWA (works offline)
+- Data stored locally in the browser (localStorage)
 
-## Usage
+## Architecture
 
-```sh
-# Add a bottle feeding
-baby-tracker add --name "Emma" --type bottle --amount 120
-
-# Add a breastfeeding session
-baby-tracker add --name "Emma" --type breast-left --duration 15
-
-# Add solid food
-baby-tracker add --name "Emma" --type solid --notes "Banana puree"
-
-# Add with a specific time
-baby-tracker add --name "Emma" --type bottle --amount 90 --time "2026-02-15 08:00"
-
-# List recent feedings
-baby-tracker list
-baby-tracker list --name "Emma" --limit 20
-
-# View today's summary
-baby-tracker summary --name "Emma"
-baby-tracker summary --days 7
-
-# Delete a feeding
-baby-tracker delete 3
+```
+src/
+  lib.rs         # WASM bindings (thin wrapper)
+  tracker.rs     # Core API (testable on native)
+  models.rs      # Domain models (Feeding, FeedingType)
+  store.rs       # In-memory store with JSON serialization
+web/
+  index.html     # PWA shell
+  js/app.js      # Frontend calling into WASM
+  css/style.css  # Mobile-first styles
+  sw.js          # Service worker for offline support
+  manifest.json  # PWA manifest
 ```
 
-## Feeding Types
-
-| Type | Short | Description |
-|------|-------|-------------|
-| `breast-left` | `bl` | Left breast |
-| `breast-right` | `br` | Right breast |
-| `bottle` | `b` | Bottle feeding |
-| `solid` | `s` | Solid food |
-
-## Building
+## Development
 
 ```sh
-cargo build --release
+# Run tests
+cargo test
+
+# Build WASM (requires wasm-pack)
+wasm-pack build --target web --out-dir web/pkg
 ```
+
+## Deployment
+
+Push to `develop` branch. GitHub Actions will:
+1. Run `cargo test`
+2. Build WASM with `wasm-pack`
+3. Deploy `web/` to GitHub Pages

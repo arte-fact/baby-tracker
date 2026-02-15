@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#6c5ce7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="Track baby feeding activity">
+  <title>Baby Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Baby Tracker</h1>
+    </header>
+
+    <!-- Add Feeding View -->
+    <section id="view-add" class="view active">
+      <form id="feeding-form">
+        <div class="form-group">
+          <label for="baby-name">Baby Name</label>
+          <input type="text" id="baby-name" required placeholder="Enter name" autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label>Feeding Type</label>
+          <div class="type-grid">
+            <button type="button" class="type-btn" data-type="breast-left">
+              <span class="type-icon">&#x1F931;</span>
+              <span>Left</span>
+            </button>
+            <button type="button" class="type-btn" data-type="breast-right">
+              <span class="type-icon">&#x1F931;</span>
+              <span>Right</span>
+            </button>
+            <button type="button" class="type-btn" data-type="bottle">
+              <span class="type-icon">&#x1F37C;</span>
+              <span>Bottle</span>
+            </button>
+            <button type="button" class="type-btn" data-type="solid">
+              <span class="type-icon">&#x1F963;</span>
+              <span>Solid</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="amount">Amount (ml)</label>
+            <input type="number" id="amount" min="0" step="5" placeholder="ml">
+          </div>
+          <div class="form-group">
+            <label for="duration">Duration (min)</label>
+            <input type="number" id="duration" min="0" placeholder="min">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="notes">Notes</label>
+          <input type="text" id="notes" placeholder="Optional notes">
+        </div>
+
+        <div class="form-group">
+          <label for="timestamp">Time</label>
+          <input type="datetime-local" id="timestamp">
+        </div>
+
+        <button type="submit" class="btn-primary" id="btn-save">Save Feeding</button>
+      </form>
+    </section>
+
+    <!-- History View -->
+    <section id="view-history" class="view">
+      <div id="history-list" class="history-list">
+        <p class="empty-state">No feedings recorded yet.</p>
+      </div>
+    </section>
+
+    <!-- Summary View -->
+    <section id="view-summary" class="view">
+      <div class="summary-period">
+        <button class="period-btn active" data-days="1">Today</button>
+        <button class="period-btn" data-days="7">7 Days</button>
+        <button class="period-btn" data-days="30">30 Days</button>
+      </div>
+      <div id="summary-content" class="summary-content">
+        <p class="empty-state">No data for this period.</p>
+      </div>
+    </section>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+      <button class="nav-btn active" data-view="add">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 4v16m-8-8h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
+        <span>Add</span>
+      </button>
+      <button class="nav-btn" data-view="history">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+        <span>History</span>
+      </button>
+      <button class="nav-btn" data-view="summary">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M4 20V10m6 10V4m6 16v-6m6 6v-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
+        <span>Summary</span>
+      </button>
+    </nav>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
