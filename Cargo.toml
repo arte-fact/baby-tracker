@@ -1,0 +1,12 @@
+[package]
+name = "baby-tracker"
+version = "0.1.0"
+edition = "2021"
+description = "Track baby feeding activity"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+chrono = { version = "0.4", features = ["serde"] }
+tabled = "0.15"
+directories = "5"
