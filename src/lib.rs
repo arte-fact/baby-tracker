@@ -101,6 +101,39 @@ impl BabyTracker {
         self.inner.delete_dejection(id)
     }
 
+    // --- Weight ---
+
+    #[wasm_bindgen(js_name = addWeight)]
+    pub fn add_weight(
+        &mut self,
+        baby_name: &str,
+        weight_kg: f64,
+        notes: Option<String>,
+        timestamp: &str,
+    ) -> Result<u64, JsError> {
+        self.inner
+            .add_weight(baby_name, weight_kg, notes, timestamp)
+            .map_err(|e| JsError::new(&e))
+    }
+
+    #[wasm_bindgen(js_name = updateWeight)]
+    pub fn update_weight(
+        &mut self,
+        id: u64,
+        weight_kg: f64,
+        notes: Option<String>,
+        timestamp: &str,
+    ) -> Result<bool, JsError> {
+        self.inner
+            .update_weight(id, weight_kg, notes, timestamp)
+            .map_err(|e| JsError::new(&e))
+    }
+
+    #[wasm_bindgen(js_name = deleteWeight)]
+    pub fn delete_weight(&mut self, id: u64) -> bool {
+        self.inner.delete_weight(id)
+    }
+
     // --- Timeline ---
 
     #[wasm_bindgen(js_name = timelineForDay)]
@@ -114,16 +147,30 @@ impl BabyTracker {
             .map_err(|e| JsError::new(&e))
     }
 
-    // --- Summary ---
+    // --- Summary (day-bounded) ---
 
     #[wasm_bindgen(js_name = getSummary)]
     pub fn get_summary(
         &self,
         baby_name: Option<String>,
-        since: &str,
+        date: &str,
     ) -> Result<String, JsError> {
         self.inner
-            .get_summary(baby_name.as_deref(), since)
+            .get_summary(baby_name.as_deref(), date)
+            .map_err(|e| JsError::new(&e))
+    }
+
+    // --- Report ---
+
+    #[wasm_bindgen(js_name = getReport)]
+    pub fn get_report(
+        &self,
+        baby_name: Option<String>,
+        start_date: &str,
+        end_date: &str,
+    ) -> Result<String, JsError> {
+        self.inner
+            .report(baby_name.as_deref(), start_date, end_date)
             .map_err(|e| JsError::new(&e))
     }
 }

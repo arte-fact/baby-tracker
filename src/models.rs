@@ -144,6 +144,40 @@ impl Dejection {
     }
 }
 
+// --- Weight ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Weight {
+    pub id: u64,
+    pub baby_name: String,
+    pub weight_kg: f64,
+    pub notes: Option<String>,
+    pub timestamp: NaiveDateTime,
+}
+
+impl Weight {
+    pub fn new(
+        baby_name: String,
+        weight_kg: f64,
+        notes: Option<String>,
+        timestamp: NaiveDateTime,
+    ) -> Result<Self, String> {
+        if baby_name.trim().is_empty() {
+            return Err("Baby name cannot be empty".to_string());
+        }
+        if weight_kg <= 0.0 {
+            return Err("Weight must be positive".to_string());
+        }
+        Ok(Weight {
+            id: 0,
+            baby_name: baby_name.trim().to_string(),
+            weight_kg,
+            notes: notes.filter(|n| !n.trim().is_empty()),
+            timestamp,
+        })
+    }
+}
+
 // --- Unified timeline entry for day view ---
 
 #[derive(Debug, Serialize)]
@@ -154,6 +188,7 @@ pub struct TimelineEntry {
     pub subtype: String,
     pub amount_ml: Option<f64>,
     pub duration_minutes: Option<u32>,
+    pub weight_kg: Option<f64>,
     pub notes: Option<String>,
     pub timestamp: NaiveDateTime,
 }
@@ -170,6 +205,7 @@ impl TimelineEntry {
                 .to_string(),
             amount_ml: f.amount_ml,
             duration_minutes: f.duration_minutes,
+            weight_kg: None,
             notes: f.notes.clone(),
             timestamp: f.timestamp,
         }
@@ -186,8 +222,23 @@ impl TimelineEntry {
                 .to_string(),
             amount_ml: None,
             duration_minutes: None,
+            weight_kg: None,
             notes: d.notes.clone(),
             timestamp: d.timestamp,
+        }
+    }
+
+    pub fn from_weight(w: &Weight) -> Self {
+        TimelineEntry {
+            id: w.id,
+            kind: "weight",
+            baby_name: w.baby_name.clone(),
+            subtype: "weight".to_string(),
+            amount_ml: None,
+            duration_minutes: None,
+            weight_kg: Some(w.weight_kg),
+            notes: w.notes.clone(),
+            timestamp: w.timestamp,
         }
     }
 }
@@ -358,7 +409,49 @@ mod tests {
         assert_eq!(d.notes, None);
     }
 
+    // --- Weight ---
+
+    #[test]
+    fn weight_new_valid() {
+        let w = Weight::new("Emma".to_string(), 3.5, Some("Birth".to_string()), ts(8, 0)).unwrap();
+        assert_eq!(w.baby_name, "Emma");
+        assert_eq!(w.weight_kg, 3.5);
+        assert_eq!(w.notes, Some("Birth".to_string()));
+    }
+
+    #[test]
+    fn weight_new_empty_name_rejected() {
+        assert!(Weight::new("".to_string(), 3.5, None, ts(8, 0)).is_err());
+    }
+
+    #[test]
+    fn weight_new_zero_rejected() {
+        assert!(Weight::new("Emma".to_string(), 0.0, None, ts(8, 0)).is_err());
+    }
+
+    #[test]
+    fn weight_new_negative_rejected() {
+        assert!(Weight::new("Emma".to_string(), -1.0, None, ts(8, 0)).is_err());
+    }
+
+    #[test]
+    fn weight_new_blank_notes_become_none() {
+        let w = Weight::new("Emma".to_string(), 3.5, Some("  ".to_string()), ts(8, 0)).unwrap();
+        assert_eq!(w.notes, None);
+    }
+
     // --- TimelineEntry ---
+
+    #[test]
+    fn timeline_entry_from_weight() {
+        let mut w = Weight::new("Emma".to_string(), 4.2, None, ts(10, 0)).unwrap();
+        w.id = 5;
+        let e = TimelineEntry::from_weight(&w);
+        assert_eq!(e.kind, "weight");
+        assert_eq!(e.subtype, "weight");
+        assert_eq!(e.weight_kg, Some(4.2));
+        assert_eq!(e.amount_ml, None);
+    }
 
     #[test]
     fn timeline_entry_from_feeding() {
