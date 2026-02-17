@@ -48,6 +48,14 @@ impl Tracker {
         serde_json::to_string(&feedings).unwrap_or_else(|_| "[]".to_string())
     }
 
+    /// List feedings for a single day (date string "YYYY-MM-DD"), returned in chronological order.
+    pub fn list_feedings_for_day(&self, baby_name: Option<&str>, date: &str) -> Result<String, String> {
+        let day_start = parse_timestamp(&format!("{}T00:00:00", date))?;
+        let day_end = day_start + chrono::Duration::days(1);
+        let feedings = self.store.list_day(baby_name, day_start, day_end);
+        Ok(serde_json::to_string(&feedings).unwrap_or_else(|_| "[]".to_string()))
+    }
+
     pub fn get_summary(&self, baby_name: Option<&str>, since: &str) -> Result<String, String> {
         let ts = parse_timestamp(since)?;
         let summary = self.store.summary(baby_name, ts);
@@ -126,6 +134,21 @@ mod tests {
         let s = t.get_summary(Some("Emma"), "2026-02-15T00:00:00").unwrap();
         assert!(s.contains("\"total_feedings\":2"));
         assert!(s.contains("120"));
+    }
+
+    #[test]
+    fn list_feedings_for_day() {
+        let mut t = Tracker::new();
+        t.add_feeding("Emma", "bottle", Some(120.0), None, None, "2026-02-14T22:00:00").unwrap();
+        t.add_feeding("Emma", "bl", None, Some(15), None, "2026-02-15T08:00:00").unwrap();
+        t.add_feeding("Emma", "bottle", Some(90.0), None, None, "2026-02-15T14:00:00").unwrap();
+        t.add_feeding("Emma", "solid", None, None, None, "2026-02-16T07:00:00").unwrap();
+
+        let json = t.list_feedings_for_day(None, "2026-02-15").unwrap();
+        let feedings: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+        assert_eq!(feedings.len(), 2);
+        // chronological order
+        assert!(feedings[0]["timestamp"].as_str().unwrap() < feedings[1]["timestamp"].as_str().unwrap());
     }
 
     #[test]

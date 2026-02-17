@@ -58,6 +58,18 @@ impl BabyTracker {
         self.inner.list_feedings(baby_name.as_deref(), limit)
     }
 
+    /// List feedings for a single day. `date` is "YYYY-MM-DD". Returns JSON array, chronological.
+    #[wasm_bindgen(js_name = listFeedingsForDay)]
+    pub fn list_feedings_for_day(
+        &self,
+        baby_name: Option<String>,
+        date: &str,
+    ) -> Result<String, JsError> {
+        self.inner
+            .list_feedings_for_day(baby_name.as_deref(), date)
+            .map_err(|e| JsError::new(&e))
+    }
+
     #[wasm_bindgen(js_name = getSummary)]
     pub fn get_summary(
         &self,
