@@ -1,6 +1,6 @@
 use chrono::NaiveDateTime;
 
-use crate::models::{Dejection, DejectionType, Feeding, FeedingType};
+use crate::models::{Dejection, DejectionType, Feeding, FeedingType, Weight};
 use crate::store::Store;
 
 pub struct Tracker {
@@ -92,6 +92,36 @@ impl Tracker {
         self.store.delete_dejection(id)
     }
 
+    // --- Weight ---
+
+    pub fn add_weight(
+        &mut self,
+        baby_name: &str,
+        weight_kg: f64,
+        notes: Option<String>,
+        timestamp: &str,
+    ) -> Result<u64, String> {
+        let ts = parse_timestamp(timestamp)?;
+        let weight = Weight::new(baby_name.to_string(), weight_kg, notes, ts)?;
+        Ok(self.store.add_weight(weight))
+    }
+
+    pub fn update_weight(
+        &mut self,
+        id: u64,
+        weight_kg: f64,
+        notes: Option<String>,
+        timestamp: &str,
+    ) -> Result<bool, String> {
+        let ts = parse_timestamp(timestamp)?;
+        let updated = Weight::new("x".to_string(), weight_kg, notes, ts)?;
+        Ok(self.store.update_weight(id, updated))
+    }
+
+    pub fn delete_weight(&mut self, id: u64) -> bool {
+        self.store.delete_weight(id)
+    }
+
     // --- Timeline ---
 
     pub fn timeline_for_day(&self, baby_name: Option<&str>, date: &str) -> Result<String, String> {
@@ -101,12 +131,22 @@ impl Tracker {
         Ok(serde_json::to_string(&entries).unwrap_or_else(|_| "[]".to_string()))
     }
 
-    // --- Summary ---
+    // --- Summary (day-bounded) ---
 
-    pub fn get_summary(&self, baby_name: Option<&str>, since: &str) -> Result<String, String> {
-        let ts = parse_timestamp(since)?;
-        let summary = self.store.summary(baby_name, ts);
+    pub fn get_summary(&self, baby_name: Option<&str>, date: &str) -> Result<String, String> {
+        let since = parse_timestamp(&format!("{}T00:00:00", date))?;
+        let until = since + chrono::Duration::days(1);
+        let summary = self.store.summary(baby_name, since, until);
         Ok(serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_string()))
+    }
+
+    // --- Report (date range) ---
+
+    pub fn report(&self, baby_name: Option<&str>, start_date: &str, end_date: &str) -> Result<String, String> {
+        let start = parse_timestamp(&format!("{}T00:00:00", start_date))?;
+        let end = parse_timestamp(&format!("{}T00:00:00", end_date))?;
+        let reports = self.store.report(baby_name, start, end);
+        Ok(serde_json::to_string(&reports).unwrap_or_else(|_| "[]".to_string()))
     }
 }
 
@@ -211,47 +251,115 @@ mod tests {
         assert!(json.contains("Changed"));
     }
 
-    // --- Timeline ---
+    // --- Weight ---
 
     #[test]
-    fn timeline_merges_types() {
+    fn add_weight() {
         let mut t = Tracker::new();
-        t.add_feeding("Emma", "bottle", Some(120.0), None, None, "2026-02-15T08:00:00").unwrap();
-        t.add_dejection("Emma", "poop", None, "2026-02-15T09:00:00").unwrap();
-        t.add_feeding("Emma", "bl", None, Some(15), None, "2026-02-15T10:00:00").unwrap();
-
+        let id = t.add_weight("Emma", 3.5, None, "2026-02-15T08:00:00").unwrap();
+        assert_eq!(id, 1);
         let json = t.timeline_for_day(None, "2026-02-15").unwrap();
-        let entries: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
-        assert_eq!(entries.len(), 3);
-        assert_eq!(entries[0]["kind"], "feeding");
-        assert_eq!(entries[1]["kind"], "dejection");
-        assert_eq!(entries[2]["kind"], "feeding");
+        assert!(json.contains("weight"));
+        assert!(json.contains("3.5"));
     }
 
     #[test]
-    fn export_and_load_with_dejections() {
+    fn add_weight_validates() {
+        let mut t = Tracker::new();
+        assert!(t.add_weight("", 3.5, None, "2026-02-15T08:00:00").is_err());
+        assert!(t.add_weight("Emma", 0.0, None, "2026-02-15T08:00:00").is_err());
+        assert!(t.add_weight("Emma", 3.5, None, "bad-date").is_err());
+    }
+
+    #[test]
+    fn update_weight() {
+        let mut t = Tracker::new();
+        let id = t.add_weight("Emma", 3.5, None, "2026-02-15T08:00:00").unwrap();
+        assert!(t.update_weight(id, 4.0, Some("Grew!".to_string()), "2026-02-15T10:00:00").unwrap());
+        let json = t.timeline_for_day(None, "2026-02-15").unwrap();
+        assert!(json.contains("4.0"));
+        assert!(json.contains("Grew!"));
+    }
+
+    #[test]
+    fn delete_weight() {
+        let mut t = Tracker::new();
+        let id = t.add_weight("Emma", 3.5, None, "2026-02-15T08:00:00").unwrap();
+        assert!(t.delete_weight(id));
+        assert!(!t.delete_weight(id));
+    }
+
+    // --- Timeline ---
+
+    #[test]
+    fn timeline_merges_all_types() {
+        let mut t = Tracker::new();
+        t.add_feeding("Emma", "bottle", Some(120.0), None, None, "2026-02-15T08:00:00").unwrap();
+        t.add_dejection("Emma", "poop", None, "2026-02-15T09:00:00").unwrap();
+        t.add_weight("Emma", 3.5, None, "2026-02-15T10:00:00").unwrap();
+        t.add_feeding("Emma", "bl", None, Some(15), None, "2026-02-15T11:00:00").unwrap();
+
+        let json = t.timeline_for_day(None, "2026-02-15").unwrap();
+        let entries: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+        assert_eq!(entries.len(), 4);
+        assert_eq!(entries[0]["kind"], "feeding");
+        assert_eq!(entries[1]["kind"], "dejection");
+        assert_eq!(entries[2]["kind"], "weight");
+        assert_eq!(entries[3]["kind"], "feeding");
+    }
+
+    #[test]
+    fn export_and_load_with_all_types() {
         let mut t = Tracker::new();
         t.add_feeding("Emma", "bl", None, Some(15), None, "2026-02-15T08:00:00").unwrap();
         t.add_dejection("Emma", "poop", None, "2026-02-15T09:00:00").unwrap();
+        t.add_weight("Emma", 3.5, None, "2026-02-15T10:00:00").unwrap();
 
         let json = t.export_data();
         let restored = Tracker::from_json(&json).unwrap();
         let tl = restored.timeline_for_day(None, "2026-02-15").unwrap();
         assert!(tl.contains("feeding"));
         assert!(tl.contains("dejection"));
+        assert!(tl.contains("weight"));
     }
 
+    // --- Summary (day-bounded) ---
+
     #[test]
-    fn summary_with_dejections() {
+    fn summary_is_day_bounded() {
         let mut t = Tracker::new();
+        t.add_feeding("Emma", "bottle", Some(100.0), None, None, "2026-02-14T20:00:00").unwrap();
         t.add_feeding("Emma", "bottle", Some(120.0), None, None, "2026-02-15T08:00:00").unwrap();
         t.add_dejection("Emma", "urine", None, "2026-02-15T09:00:00").unwrap();
         t.add_dejection("Emma", "poop", None, "2026-02-15T10:00:00").unwrap();
+        t.add_weight("Emma", 3.5, None, "2026-02-15T11:00:00").unwrap();
+        t.add_feeding("Emma", "bottle", Some(90.0), None, None, "2026-02-16T06:00:00").unwrap();
 
-        let s = t.get_summary(None, "2026-02-15T00:00:00").unwrap();
+        let s = t.get_summary(None, "2026-02-15").unwrap();
         assert!(s.contains("\"total_feedings\":1"));
+        assert!(s.contains("\"total_ml\":120"));
         assert!(s.contains("\"total_urine\":1"));
         assert!(s.contains("\"total_poop\":1"));
+        assert!(s.contains("\"latest_weight_kg\":3.5"));
+    }
+
+    // --- Report ---
+
+    #[test]
+    fn report_returns_per_day_data() {
+        let mut t = Tracker::new();
+        t.add_feeding("Emma", "bottle", Some(120.0), None, None, "2026-02-14T08:00:00").unwrap();
+        t.add_feeding("Emma", "bl", None, Some(15), None, "2026-02-15T10:00:00").unwrap();
+
+        let r = t.report(None, "2026-02-14", "2026-02-16").unwrap();
+        let days: Vec<serde_json::Value> = serde_json::from_str(&r).unwrap();
+        assert_eq!(days.len(), 2);
+        assert_eq!(days[0]["date"], "2026-02-14");
+        assert_eq!(days[0]["total_feedings"], 1);
+        assert_eq!(days[0]["total_ml"], 120.0);
+        assert_eq!(days[1]["date"], "2026-02-15");
+        assert_eq!(days[1]["total_feedings"], 1);
+        assert_eq!(days[1]["total_minutes"], 15);
     }
 
     #[test]

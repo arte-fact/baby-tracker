@@ -13,6 +13,8 @@ resetToStartOfDay(currentDate);
 
 let activeFeeding = null; // { type, startedAt (ms timestamp) }
 let timerInterval = null;
+let currentView = 'day'; // 'day' | 'report'
+let currentMetric = 'total_feedings';
 
 // --- Persistence ---
 
@@ -27,7 +29,6 @@ function load() {
   } else {
     tracker = new BabyTracker();
   }
-  // Restore active feeding from localStorage (survives page reload)
   const active = localStorage.getItem(ACTIVE_KEY);
   if (active) {
     try { activeFeeding = JSON.parse(active); } catch { activeFeeding = null; }
@@ -99,6 +100,11 @@ function toDatetimeLocal(isoStr) {
   return `${y}-${mo}-${day}T${h}:${mi}`;
 }
 
+function shortDate(dateString) {
+  const d = new Date(dateString + 'T12:00:00');
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
 const ICONS = {
   'breast-left': '\u{1F931}',
   'breast-right': '\u{1F931}',
@@ -106,6 +112,7 @@ const ICONS = {
   'solid': '\u{1F963}',
   'urine': '\u{1F4A7}',
   'poop': '\u{1F4A9}',
+  'weight': '\u{2696}\u{FE0F}',
 };
 
 const LABELS = {
@@ -115,6 +122,7 @@ const LABELS = {
   'solid': 'Solid',
   'urine': 'Pee',
   'poop': 'Poop',
+  'weight': 'Weight',
 };
 
 const FEEDING_SUBTYPES = ['breast-left', 'breast-right', 'bottle', 'solid'];
@@ -140,15 +148,33 @@ function updateDayHeader() {
   $dayDate.textContent = currentDate.toLocaleDateString([], {
     month: 'short', day: 'numeric', year: 'numeric',
   });
-
-  // Hide "next" if we're on today
-  $btnNext.style.visibility = isToday(currentDate) ? 'hidden' : 'visible';
 }
 
 function goDay(offset) {
   currentDate.setDate(currentDate.getDate() + offset);
   resetToStartOfDay(currentDate);
   render();
+}
+
+// --- View switching ---
+
+const $viewDay = document.getElementById('view-day');
+const $viewReport = document.getElementById('view-report');
+const $fab = document.getElementById('fab');
+
+function showView(view) {
+  currentView = view;
+  if (view === 'day') {
+    $viewDay.classList.remove('hidden');
+    $viewReport.classList.add('hidden');
+    $fab.classList.remove('hidden');
+    render();
+  } else {
+    $viewDay.classList.add('hidden');
+    $viewReport.classList.remove('hidden');
+    $fab.classList.add('hidden');
+    renderReport();
+  }
 }
 
 // --- Swipe ---
@@ -168,12 +194,11 @@ function setupSwipe() {
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
 
-    // Only trigger swipe if horizontal movement dominates
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
       if (dx > 0) {
-        goDay(-1); // swipe right = previous day
+        goDay(-1);
       } else if (!isToday(currentDate)) {
-        goDay(1);  // swipe left = next day
+        goDay(1);
       }
     }
   }, { passive: true });
@@ -208,6 +233,7 @@ function renderTimeline() {
     const icon = ICONS[e.subtype] || '';
     const label = LABELS[e.subtype] || e.subtype;
     const meta = [];
+    if (e.weight_kg != null) meta.push(`${e.weight_kg} kg`);
     if (e.amount_ml != null) meta.push(`${e.amount_ml} ml`);
     if (e.duration_minutes != null) meta.push(`${e.duration_minutes} min`);
     if (e.notes) meta.push(e.notes);
@@ -226,11 +252,9 @@ function renderTimeline() {
     `;
   }).join('');
 
-  // Tap entry to edit
   $timeline.querySelectorAll('.tl-entry').forEach(el => {
     el.addEventListener('click', () => {
       const id = parseInt(el.dataset.id);
-      const kind = el.dataset.kind;
       const entry = entries.find(e => e.id === id);
       if (entry) openEditModal(entry);
     });
@@ -241,30 +265,34 @@ function renderDaySummary() {
   const ds = dateStr(currentDate);
   let summary;
   try {
-    summary = JSON.parse(tracker.getSummary(undefined, `${ds}T00:00:00`));
+    summary = JSON.parse(tracker.getSummary(undefined, ds));
   } catch {
-    summary = { total_feedings: 0, total_ml: 0, total_minutes: 0, total_urine: 0, total_poop: 0 };
+    summary = { total_feedings: 0, total_ml: 0, total_minutes: 0, total_urine: 0, total_poop: 0, latest_weight_kg: null };
   }
 
-  const { total_feedings, total_ml, total_minutes, total_urine, total_poop } = summary;
-  const hasAnything = total_feedings + total_urine + total_poop > 0;
+  const { total_feedings, total_ml, total_minutes, total_urine, total_poop, latest_weight_kg } = summary;
+  const hasAnything = total_feedings + total_urine + total_poop > 0 || latest_weight_kg;
 
   if (!hasAnything) {
     $daySummary.innerHTML = '';
     return;
   }
 
-  $daySummary.innerHTML = `
+  let stats = `
     <div class="day-stat"><span class="val">${total_feedings}</span><br>feedings</div>
     <div class="day-stat"><span class="val">${total_ml > 0 ? Math.round(total_ml) + ' ml' : '\u2014'}</span><br>volume</div>
     <div class="day-stat"><span class="val">${total_minutes > 0 ? total_minutes + ' min' : '\u2014'}</span><br>nursing</div>
     <div class="day-stat"><span class="val">${total_urine}\u{1F4A7} ${total_poop}\u{1F4A9}</span><br>diapers</div>
   `;
+  if (latest_weight_kg != null) {
+    stats += `<div class="day-stat"><span class="val">${latest_weight_kg} kg</span><br>weight</div>`;
+  }
+
+  $daySummary.innerHTML = stats;
 }
 
 // --- FAB / Timer ---
 
-const $fab = document.getElementById('fab');
 const $fabIconStart = document.getElementById('fab-icon-start');
 const $fabTimer = document.getElementById('fab-timer');
 const $fabTimerText = document.getElementById('fab-timer-text');
@@ -277,7 +305,6 @@ function setupFAB() {
       showTypePicker();
     }
   });
-  // Restore timer UI if there's an active feeding
   if (activeFeeding) {
     enterRecordingMode();
   }
@@ -319,7 +346,6 @@ function stopFeeding() {
     console.error('Failed to save feeding:', err);
   }
 
-  // Clean up
   clearInterval(timerInterval);
   timerInterval = null;
   activeFeeding = null;
@@ -329,7 +355,6 @@ function stopFeeding() {
   $fabTimer.classList.add('hidden');
   $fabIconStart.classList.remove('hidden');
 
-  // Navigate to the day where the feeding was recorded and re-render
   currentDate = new Date(startDate);
   resetToStartOfDay(currentDate);
   render();
@@ -348,10 +373,8 @@ function hideTypePicker() {
 }
 
 function setupTypePicker() {
-  // Backdrop dismiss
   $typePicker.querySelector('.type-picker-backdrop').addEventListener('click', hideTypePicker);
 
-  // Type buttons
   $typePicker.querySelectorAll('.type-pick-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const kind = btn.dataset.kind;
@@ -359,24 +382,105 @@ function setupTypePicker() {
       hideTypePicker();
 
       if (kind === 'dejection') {
-        // Dejections are instant - save immediately
+        // Instant save
         const name = getBabyName();
         const timestamp = toISOTimestamp(new Date());
         try {
           tracker.addDejection(name, type, undefined, timestamp);
           save();
-          // Navigate to today and re-render
           currentDate = new Date();
           resetToStartOfDay(currentDate);
           render();
         } catch (err) {
           console.error('Failed to save dejection:', err);
         }
+      } else if (kind === 'feeding-bottle') {
+        // Bottle: show volume slider
+        openSliderModal('bottle');
+      } else if (kind === 'weight') {
+        // Weight: show weight slider
+        openSliderModal('weight');
       } else {
-        // Feedings use the timer
+        // Breast/solid: use timer
         startFeeding(type);
       }
     });
+  });
+}
+
+// --- Slider Modal ---
+
+const $sliderModal = document.getElementById('slider-modal');
+const $sliderTitle = document.getElementById('slider-title');
+const $sliderDisplay = document.getElementById('slider-display');
+const $sliderUnit = document.getElementById('slider-unit');
+const $sliderInput = document.getElementById('slider-input');
+const $sliderMin = document.getElementById('slider-min');
+const $sliderMax = document.getElementById('slider-max');
+const $sliderNotes = document.getElementById('slider-notes');
+const $sliderSave = document.getElementById('slider-save');
+
+let sliderMode = null; // 'bottle' | 'weight'
+
+function openSliderModal(mode) {
+  sliderMode = mode;
+  if (mode === 'bottle') {
+    $sliderTitle.textContent = 'Bottle Volume';
+    $sliderUnit.textContent = 'ml';
+    $sliderInput.min = '0';
+    $sliderInput.max = '300';
+    $sliderInput.step = '5';
+    $sliderInput.value = '90';
+    $sliderMin.textContent = '0';
+    $sliderMax.textContent = '300';
+    $sliderDisplay.textContent = '90';
+  } else {
+    $sliderTitle.textContent = 'Weight';
+    $sliderUnit.textContent = 'kg';
+    $sliderInput.min = '1.0';
+    $sliderInput.max = '15.0';
+    $sliderInput.step = '0.1';
+    $sliderInput.value = '4.0';
+    $sliderMin.textContent = '1.0';
+    $sliderMax.textContent = '15.0';
+    $sliderDisplay.textContent = '4.0';
+  }
+  $sliderNotes.value = '';
+  $sliderModal.classList.remove('hidden');
+}
+
+function hideSliderModal() {
+  $sliderModal.classList.add('hidden');
+}
+
+function setupSliderModal() {
+  $sliderModal.querySelector('.edit-modal-backdrop').addEventListener('click', hideSliderModal);
+
+  $sliderInput.addEventListener('input', () => {
+    $sliderDisplay.textContent = $sliderInput.value;
+  });
+
+  $sliderSave.addEventListener('click', () => {
+    const name = getBabyName();
+    const timestamp = toISOTimestamp(new Date());
+    const notes = $sliderNotes.value.trim() || undefined;
+
+    try {
+      if (sliderMode === 'bottle') {
+        const ml = parseFloat($sliderInput.value);
+        tracker.addFeeding(name, 'bottle', ml, undefined, notes, timestamp);
+      } else {
+        const kg = parseFloat($sliderInput.value);
+        tracker.addWeight(name, kg, notes, timestamp);
+      }
+      save();
+      hideSliderModal();
+      currentDate = new Date();
+      resetToStartOfDay(currentDate);
+      render();
+    } catch (err) {
+      console.error('Failed to save:', err);
+    }
   });
 }
 
@@ -388,9 +492,11 @@ const $editKind = document.getElementById('edit-kind');
 const $editSubtype = document.getElementById('edit-subtype');
 const $editAmount = document.getElementById('edit-amount');
 const $editDuration = document.getElementById('edit-duration');
+const $editWeight = document.getElementById('edit-weight');
 const $editNotes = document.getElementById('edit-notes');
 const $editTime = document.getElementById('edit-time');
 const $editFeedingFields = document.getElementById('edit-feeding-fields');
+const $editWeightField = document.getElementById('edit-weight-field');
 const $editDelete = document.getElementById('edit-delete');
 const $editSave = document.getElementById('edit-save');
 
@@ -398,21 +504,35 @@ function openEditModal(entry) {
   $editId.value = entry.id;
   $editKind.value = entry.kind;
 
-  // Populate subtype options
-  const subtypes = entry.kind === 'feeding' ? FEEDING_SUBTYPES : DEJECTION_SUBTYPES;
-  $editSubtype.innerHTML = subtypes.map(s =>
-    `<option value="${s}" ${s === entry.subtype ? 'selected' : ''}>${LABELS[s]}</option>`
-  ).join('');
+  // Populate subtype options based on kind
+  if (entry.kind === 'feeding') {
+    $editSubtype.innerHTML = FEEDING_SUBTYPES.map(s =>
+      `<option value="${s}" ${s === entry.subtype ? 'selected' : ''}>${LABELS[s]}</option>`
+    ).join('');
+    $editSubtype.closest('.form-group').classList.remove('hidden');
+  } else if (entry.kind === 'dejection') {
+    $editSubtype.innerHTML = DEJECTION_SUBTYPES.map(s =>
+      `<option value="${s}" ${s === entry.subtype ? 'selected' : ''}>${LABELS[s]}</option>`
+    ).join('');
+    $editSubtype.closest('.form-group').classList.remove('hidden');
+  } else {
+    // weight - no subtype selection
+    $editSubtype.closest('.form-group').classList.add('hidden');
+  }
 
-  // Show/hide feeding-specific fields
+  // Show/hide kind-specific fields
   if (entry.kind === 'feeding') {
     $editFeedingFields.classList.remove('hidden');
+    $editWeightField.classList.add('hidden');
     $editAmount.value = entry.amount_ml != null ? entry.amount_ml : '';
     $editDuration.value = entry.duration_minutes != null ? entry.duration_minutes : '';
+  } else if (entry.kind === 'weight') {
+    $editFeedingFields.classList.add('hidden');
+    $editWeightField.classList.remove('hidden');
+    $editWeight.value = entry.weight_kg != null ? entry.weight_kg : '';
   } else {
     $editFeedingFields.classList.add('hidden');
-    $editAmount.value = '';
-    $editDuration.value = '';
+    $editWeightField.classList.add('hidden');
   }
 
   $editNotes.value = entry.notes || '';
@@ -426,24 +546,25 @@ function hideEditModal() {
 }
 
 function setupEditModal() {
-  // Backdrop dismiss
   $editModal.querySelector('.edit-modal-backdrop').addEventListener('click', hideEditModal);
 
-  // Save
   $editSave.addEventListener('click', () => {
     const id = parseInt($editId.value);
     const kind = $editKind.value;
     const subtype = $editSubtype.value;
     const notes = $editNotes.value.trim() || undefined;
-    const timestamp = $editTime.value + ':00'; // add seconds
+    const timestamp = $editTime.value + ':00';
 
     try {
       if (kind === 'feeding') {
         const amount = $editAmount.value ? parseFloat($editAmount.value) : undefined;
         const duration = $editDuration.value ? parseInt($editDuration.value) : undefined;
         tracker.updateFeeding(id, subtype, amount, duration, notes, timestamp);
-      } else {
+      } else if (kind === 'dejection') {
         tracker.updateDejection(id, subtype, notes, timestamp);
+      } else if (kind === 'weight') {
+        const kg = parseFloat($editWeight.value);
+        tracker.updateWeight(id, kg, notes, timestamp);
       }
       save();
       hideEditModal();
@@ -453,20 +574,178 @@ function setupEditModal() {
     }
   });
 
-  // Delete
   $editDelete.addEventListener('click', () => {
     const id = parseInt($editId.value);
     const kind = $editKind.value;
 
     if (kind === 'feeding') {
       tracker.deleteFeeding(id);
-    } else {
+    } else if (kind === 'dejection') {
       tracker.deleteDejection(id);
+    } else if (kind === 'weight') {
+      tracker.deleteWeight(id);
     }
     save();
     hideEditModal();
     render();
   });
+}
+
+// --- Report View ---
+
+const $reportRange = document.getElementById('report-range');
+const $reportMetrics = document.getElementById('report-metrics');
+const $reportChart = document.getElementById('report-chart');
+const $reportTable = document.getElementById('report-table');
+
+function setupReport() {
+  document.getElementById('btn-report').addEventListener('click', () => showView('report'));
+  document.getElementById('btn-back-day').addEventListener('click', () => showView('day'));
+
+  $reportMetrics.querySelectorAll('.metric-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $reportMetrics.querySelector('.active').classList.remove('active');
+      btn.classList.add('active');
+      currentMetric = btn.dataset.metric;
+      renderReport();
+    });
+  });
+}
+
+function getReportData() {
+  const end = new Date();
+  end.setDate(end.getDate() + 1);
+  const start = new Date();
+  start.setDate(start.getDate() - 13); // last 14 days
+  try {
+    return JSON.parse(tracker.getReport(undefined, dateStr(start), dateStr(end)));
+  } catch {
+    return [];
+  }
+}
+
+function renderReport() {
+  const data = getReportData();
+  if (data.length === 0) return;
+
+  $reportRange.textContent = `${shortDate(data[0].date)} - ${shortDate(data[data.length - 1].date)}`;
+
+  const values = data.map(d => d[currentMetric] ?? null);
+
+  drawChart(data, values);
+  drawTable(data, values);
+}
+
+function drawChart(data, values) {
+  const canvas = $reportChart;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.parentElement.clientWidth;
+  const h = 200;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.scale(dpr, dpr);
+
+  ctx.clearRect(0, 0, w, h);
+
+  const numericValues = values.map(v => (v == null ? 0 : v));
+  const maxVal = Math.max(...numericValues, 1);
+
+  const padLeft = 10;
+  const padRight = 10;
+  const padTop = 20;
+  const padBottom = 30;
+  const chartW = w - padLeft - padRight;
+  const chartH = h - padTop - padBottom;
+  const barW = Math.max(4, (chartW / data.length) - 4);
+  const gap = (chartW - barW * data.length) / (data.length + 1);
+
+  // Grid lines
+  ctx.strokeStyle = '#eee';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = padTop + (chartH / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(padLeft, y);
+    ctx.lineTo(w - padRight, y);
+    ctx.stroke();
+  }
+
+  // Bars
+  const isWeight = currentMetric === 'weight_kg';
+
+  data.forEach((day, i) => {
+    const val = numericValues[i];
+    const x = padLeft + gap + i * (barW + gap);
+    const barH = maxVal > 0 ? (val / maxVal) * chartH : 0;
+    const y = padTop + chartH - barH;
+
+    if (isWeight && values[i] == null) {
+      // No bar for null weight days
+    } else {
+      ctx.fillStyle = val > 0 ? '#6c5ce7' : '#e0e0e0';
+      ctx.beginPath();
+      ctx.roundRect(x, y, barW, barH || 1, [3, 3, 0, 0]);
+      ctx.fill();
+    }
+
+    // Date label
+    if (i % Math.ceil(data.length / 7) === 0 || i === data.length - 1) {
+      ctx.fillStyle = '#636e72';
+      ctx.font = '10px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(shortDate(day.date), x + barW / 2, h - 6);
+    }
+  });
+
+  // Value labels on top
+  ctx.fillStyle = '#6c5ce7';
+  ctx.font = 'bold 10px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  data.forEach((day, i) => {
+    const val = numericValues[i];
+    if (val > 0) {
+      const x = padLeft + gap + i * (barW + gap) + barW / 2;
+      const barH = (val / maxVal) * chartH;
+      const y = padTop + chartH - barH - 4;
+      const label = isWeight ? val.toFixed(1) : String(Math.round(val));
+      ctx.fillText(label, x, y);
+    }
+  });
+}
+
+function drawTable(data, values) {
+  const isWeight = currentMetric === 'weight_kg';
+  const unit = {
+    total_feedings: '',
+    total_ml: ' ml',
+    total_minutes: ' min',
+    total_urine: '',
+    total_poop: '',
+    weight_kg: ' kg',
+  }[currentMetric] || '';
+
+  // Show most recent first
+  const reversed = [...data].reverse();
+  const reversedValues = [...values].reverse();
+
+  $reportTable.innerHTML = reversed.map((day, i) => {
+    const val = reversedValues[i];
+    let display;
+    if (val == null || (val === 0 && !isWeight)) {
+      display = '\u2014';
+    } else {
+      display = (isWeight ? val.toFixed(1) : String(Math.round(val))) + unit;
+    }
+    return `
+      <div class="report-row">
+        <span class="report-row-date">${shortDate(day.date)}</span>
+        <span class="report-row-val">${display}</span>
+      </div>
+    `;
+  }).join('');
 }
 
 // --- Name Prompt ---
@@ -476,7 +755,6 @@ const $nameInput = document.getElementById('name-input');
 const $nameSave = document.getElementById('name-save');
 
 function setupNamePrompt() {
-  // Show if no name is saved yet
   if (!getBabyName()) {
     $namePrompt.classList.remove('hidden');
     $nameInput.focus();
@@ -487,7 +765,6 @@ function setupNamePrompt() {
     if (e.key === 'Enter') saveName();
   });
 
-  // Long-press on day title to change name
   let pressTimer = null;
   document.getElementById('day-label').addEventListener('pointerdown', () => {
     pressTimer = setTimeout(() => {
@@ -516,8 +793,10 @@ async function main() {
   setupSwipe();
   setupFAB();
   setupTypePicker();
+  setupSliderModal();
   setupEditModal();
   setupNamePrompt();
+  setupReport();
 
   $btnPrev.addEventListener('click', () => goDay(-1));
   $btnNext.addEventListener('click', () => goDay(1));
