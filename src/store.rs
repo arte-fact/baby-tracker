@@ -50,6 +50,25 @@ impl Store {
         result
     }
 
+    pub fn list_day(
+        &self,
+        baby_name: Option<&str>,
+        day_start: NaiveDateTime,
+        day_end: NaiveDateTime,
+    ) -> Vec<&Feeding> {
+        let mut result: Vec<&Feeding> = self
+            .feedings
+            .iter()
+            .filter(|f| {
+                f.timestamp >= day_start
+                    && f.timestamp < day_end
+                    && baby_name.map_or(true, |name| f.baby_name == name)
+            })
+            .collect();
+        result.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+        result
+    }
+
     pub fn summary(&self, baby_name: Option<&str>, since: NaiveDateTime) -> Summary {
         let filtered: Vec<&Feeding> = self
             .feedings
@@ -97,7 +116,7 @@ pub struct Summary {
 mod tests {
     use super::*;
     use crate::models::{Feeding, FeedingType};
-    use chrono::NaiveDate;
+    use chrono::{NaiveDate, Timelike};
 
     fn ts(day: u32, h: u32, m: u32) -> NaiveDateTime {
         NaiveDate::from_ymd_opt(2026, 2, day)
@@ -224,6 +243,54 @@ mod tests {
     #[test]
     fn from_json_invalid_returns_error() {
         assert!(Store::from_json("not json").is_err());
+    }
+
+    // --- Summary ---
+
+    // --- list_day ---
+
+    #[test]
+    fn list_day_returns_feedings_for_that_day() {
+        let mut store = Store::new();
+        store.add(make_feeding("Emma", FeedingType::Bottle, None, None, 14, 20));
+        store.add(make_feeding("Emma", FeedingType::Bottle, None, None, 15, 8));
+        store.add(make_feeding("Emma", FeedingType::BreastLeft, None, None, 15, 14));
+        store.add(make_feeding("Emma", FeedingType::Bottle, None, None, 16, 6));
+
+        let day = store.list_day(None, ts(15, 0, 0), ts(16, 0, 0));
+        assert_eq!(day.len(), 2);
+        assert_eq!(day[0].timestamp.hour(), 8);
+        assert_eq!(day[1].timestamp.hour(), 14);
+    }
+
+    #[test]
+    fn list_day_chronological_order() {
+        let mut store = Store::new();
+        store.add(make_feeding("Emma", FeedingType::Bottle, None, None, 15, 18));
+        store.add(make_feeding("Emma", FeedingType::Bottle, None, None, 15, 6));
+        store.add(make_feeding("Emma", FeedingType::Bottle, None, None, 15, 12));
+
+        let day = store.list_day(None, ts(15, 0, 0), ts(16, 0, 0));
+        assert!(day[0].timestamp < day[1].timestamp);
+        assert!(day[1].timestamp < day[2].timestamp);
+    }
+
+    #[test]
+    fn list_day_filters_by_name() {
+        let mut store = Store::new();
+        store.add(make_feeding("Emma", FeedingType::Bottle, None, None, 15, 8));
+        store.add(make_feeding("Noah", FeedingType::Bottle, None, None, 15, 9));
+
+        let day = store.list_day(Some("Emma"), ts(15, 0, 0), ts(16, 0, 0));
+        assert_eq!(day.len(), 1);
+        assert_eq!(day[0].baby_name, "Emma");
+    }
+
+    #[test]
+    fn list_day_empty_for_no_feedings() {
+        let store = Store::new();
+        let day = store.list_day(None, ts(15, 0, 0), ts(16, 0, 0));
+        assert!(day.is_empty());
     }
 
     // --- Summary ---

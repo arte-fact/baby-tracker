@@ -15,99 +15,71 @@
 </head>
 <body>
   <div id="app">
-    <header>
-      <h1>Baby Tracker</h1>
+    <!-- Day Header -->
+    <header id="day-header">
+      <button id="btn-prev" class="nav-arrow" aria-label="Previous day">
+        <svg viewBox="0 0 24 24" width="28" height="28"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+      </button>
+      <div id="day-label" class="day-label">
+        <span id="day-title">Today</span>
+        <span id="day-date">Feb 17, 2026</span>
+      </div>
+      <button id="btn-next" class="nav-arrow" aria-label="Next day">
+        <svg viewBox="0 0 24 24" width="28" height="28"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+      </button>
     </header>
 
-    <!-- Add Feeding View -->
-    <section id="view-add" class="view active">
-      <form id="feeding-form">
-        <div class="form-group">
-          <label for="baby-name">Baby Name</label>
-          <input type="text" id="baby-name" required placeholder="Enter name" autocomplete="off">
+    <!-- Day Summary Bar -->
+    <div id="day-summary" class="day-summary"></div>
+
+    <!-- Timeline -->
+    <main id="timeline" class="timeline">
+      <div class="empty-state">No feedings today</div>
+    </main>
+
+    <!-- Type Picker (shown when starting a feeding) -->
+    <div id="type-picker" class="type-picker hidden">
+      <div class="type-picker-backdrop"></div>
+      <div class="type-picker-sheet">
+        <div class="type-picker-title">What type?</div>
+        <div class="type-picker-grid">
+          <button class="type-pick-btn" data-type="breast-left">
+            <span class="pick-icon">&#x1F931;</span>
+            <span>Left</span>
+          </button>
+          <button class="type-pick-btn" data-type="breast-right">
+            <span class="pick-icon">&#x1F931;</span>
+            <span>Right</span>
+          </button>
+          <button class="type-pick-btn" data-type="bottle">
+            <span class="pick-icon">&#x1F37C;</span>
+            <span>Bottle</span>
+          </button>
+          <button class="type-pick-btn" data-type="solid">
+            <span class="pick-icon">&#x1F963;</span>
+            <span>Solid</span>
+          </button>
         </div>
-
-        <div class="form-group">
-          <label>Feeding Type</label>
-          <div class="type-grid">
-            <button type="button" class="type-btn" data-type="breast-left">
-              <span class="type-icon">&#x1F931;</span>
-              <span>Left</span>
-            </button>
-            <button type="button" class="type-btn" data-type="breast-right">
-              <span class="type-icon">&#x1F931;</span>
-              <span>Right</span>
-            </button>
-            <button type="button" class="type-btn" data-type="bottle">
-              <span class="type-icon">&#x1F37C;</span>
-              <span>Bottle</span>
-            </button>
-            <button type="button" class="type-btn" data-type="solid">
-              <span class="type-icon">&#x1F963;</span>
-              <span>Solid</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="amount">Amount (ml)</label>
-            <input type="number" id="amount" min="0" step="5" placeholder="ml">
-          </div>
-          <div class="form-group">
-            <label for="duration">Duration (min)</label>
-            <input type="number" id="duration" min="0" placeholder="min">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="notes">Notes</label>
-          <input type="text" id="notes" placeholder="Optional notes">
-        </div>
-
-        <div class="form-group">
-          <label for="timestamp">Time</label>
-          <input type="datetime-local" id="timestamp">
-        </div>
-
-        <button type="submit" class="btn-primary" id="btn-save">Save Feeding</button>
-      </form>
-    </section>
-
-    <!-- History View -->
-    <section id="view-history" class="view">
-      <div id="history-list" class="history-list">
-        <p class="empty-state">No feedings recorded yet.</p>
       </div>
-    </section>
+    </div>
 
-    <!-- Summary View -->
-    <section id="view-summary" class="view">
-      <div class="summary-period">
-        <button class="period-btn active" data-days="1">Today</button>
-        <button class="period-btn" data-days="7">7 Days</button>
-        <button class="period-btn" data-days="30">30 Days</button>
+    <!-- FAB -->
+    <button id="fab" class="fab" aria-label="Start feeding">
+      <svg id="fab-icon-start" viewBox="0 0 24 24" width="32" height="32"><path d="M12 4v16m-8-8h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
+      <div id="fab-timer" class="fab-timer hidden">
+        <span id="fab-timer-text">0:00</span>
       </div>
-      <div id="summary-content" class="summary-content">
-        <p class="empty-state">No data for this period.</p>
-      </div>
-    </section>
+    </button>
 
-    <!-- Bottom Navigation -->
-    <nav class="bottom-nav">
-      <button class="nav-btn active" data-view="add">
-        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 4v16m-8-8h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
-        <span>Add</span>
-      </button>
-      <button class="nav-btn" data-view="history">
-        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-        <span>History</span>
-      </button>
-      <button class="nav-btn" data-view="summary">
-        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M4 20V10m6 10V4m6 16v-6m6 6v-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
-        <span>Summary</span>
-      </button>
-    </nav>
+    <!-- Settings (baby name) - slide-up on first use -->
+    <div id="name-prompt" class="name-prompt hidden">
+      <div class="name-prompt-backdrop"></div>
+      <div class="name-prompt-sheet">
+        <div class="name-prompt-title">Baby's name</div>
+        <input type="text" id="name-input" placeholder="Enter name" autocomplete="off">
+        <button id="name-save" class="btn-primary">Save</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="js/app.js"></script>
