@@ -125,9 +125,6 @@ const LABELS = {
   'weight': 'Weight',
 };
 
-const FEEDING_SUBTYPES = ['breast-left', 'breast-right', 'bottle', 'solid'];
-const DEJECTION_SUBTYPES = ['urine', 'poop'];
-
 // --- Day Navigation ---
 
 const $dayTitle = document.getElementById('day-title');
@@ -382,7 +379,6 @@ function setupTypePicker() {
       hideTypePicker();
 
       if (kind === 'dejection') {
-        // Instant save
         const name = getBabyName();
         const timestamp = toISOTimestamp(new Date());
         try {
@@ -395,13 +391,10 @@ function setupTypePicker() {
           console.error('Failed to save dejection:', err);
         }
       } else if (kind === 'feeding-bottle') {
-        // Bottle: show volume slider
         openSliderModal('bottle');
       } else if (kind === 'weight') {
-        // Weight: show weight slider
         openSliderModal('weight');
       } else {
-        // Breast/solid: use timer
         startFeeding(type);
       }
     });
@@ -420,7 +413,7 @@ const $sliderMax = document.getElementById('slider-max');
 const $sliderNotes = document.getElementById('slider-notes');
 const $sliderSave = document.getElementById('slider-save');
 
-let sliderMode = null; // 'bottle' | 'weight'
+let sliderMode = null;
 
 function openSliderModal(mode) {
   sliderMode = mode;
@@ -484,62 +477,10 @@ function setupSliderModal() {
   });
 }
 
-// --- Edit Modal ---
+// --- Edit Modal (type-specific forms) ---
 
 const $editModal = document.getElementById('edit-modal');
-const $editId = document.getElementById('edit-id');
-const $editKind = document.getElementById('edit-kind');
-const $editSubtype = document.getElementById('edit-subtype');
-const $editAmount = document.getElementById('edit-amount');
-const $editDuration = document.getElementById('edit-duration');
-const $editWeight = document.getElementById('edit-weight');
-const $editNotes = document.getElementById('edit-notes');
-const $editTime = document.getElementById('edit-time');
-const $editFeedingFields = document.getElementById('edit-feeding-fields');
-const $editWeightField = document.getElementById('edit-weight-field');
-const $editDelete = document.getElementById('edit-delete');
-const $editSave = document.getElementById('edit-save');
-
-function openEditModal(entry) {
-  $editId.value = entry.id;
-  $editKind.value = entry.kind;
-
-  // Populate subtype options based on kind
-  if (entry.kind === 'feeding') {
-    $editSubtype.innerHTML = FEEDING_SUBTYPES.map(s =>
-      `<option value="${s}" ${s === entry.subtype ? 'selected' : ''}>${LABELS[s]}</option>`
-    ).join('');
-    $editSubtype.closest('.form-group').classList.remove('hidden');
-  } else if (entry.kind === 'dejection') {
-    $editSubtype.innerHTML = DEJECTION_SUBTYPES.map(s =>
-      `<option value="${s}" ${s === entry.subtype ? 'selected' : ''}>${LABELS[s]}</option>`
-    ).join('');
-    $editSubtype.closest('.form-group').classList.remove('hidden');
-  } else {
-    // weight - no subtype selection
-    $editSubtype.closest('.form-group').classList.add('hidden');
-  }
-
-  // Show/hide kind-specific fields
-  if (entry.kind === 'feeding') {
-    $editFeedingFields.classList.remove('hidden');
-    $editWeightField.classList.add('hidden');
-    $editAmount.value = entry.amount_ml != null ? entry.amount_ml : '';
-    $editDuration.value = entry.duration_minutes != null ? entry.duration_minutes : '';
-  } else if (entry.kind === 'weight') {
-    $editFeedingFields.classList.add('hidden');
-    $editWeightField.classList.remove('hidden');
-    $editWeight.value = entry.weight_kg != null ? entry.weight_kg : '';
-  } else {
-    $editFeedingFields.classList.add('hidden');
-    $editWeightField.classList.add('hidden');
-  }
-
-  $editNotes.value = entry.notes || '';
-  $editTime.value = toDatetimeLocal(entry.timestamp);
-
-  $editModal.classList.remove('hidden');
-}
+const $editSheet = document.getElementById('edit-sheet');
 
 function hideEditModal() {
   $editModal.classList.add('hidden');
@@ -547,48 +488,160 @@ function hideEditModal() {
 
 function setupEditModal() {
   $editModal.querySelector('.edit-modal-backdrop').addEventListener('click', hideEditModal);
+}
 
-  $editSave.addEventListener('click', () => {
-    const id = parseInt($editId.value);
-    const kind = $editKind.value;
-    const subtype = $editSubtype.value;
-    const notes = $editNotes.value.trim() || undefined;
-    const timestamp = $editTime.value + ':00';
+function openEditModal(entry) {
+  const icon = ICONS[entry.subtype] || '';
+  const label = LABELS[entry.subtype] || entry.subtype;
+  let fieldsHTML = '';
 
-    try {
-      if (kind === 'feeding') {
-        const amount = $editAmount.value ? parseFloat($editAmount.value) : undefined;
-        const duration = $editDuration.value ? parseInt($editDuration.value) : undefined;
-        tracker.updateFeeding(id, subtype, amount, duration, notes, timestamp);
-      } else if (kind === 'dejection') {
-        tracker.updateDejection(id, subtype, notes, timestamp);
-      } else if (kind === 'weight') {
-        const kg = parseFloat($editWeight.value);
-        tracker.updateWeight(id, kg, notes, timestamp);
-      }
-      save();
-      hideEditModal();
-      render();
-    } catch (err) {
-      console.error('Failed to update entry:', err);
-    }
+  if (entry.kind === 'feeding') {
+    fieldsHTML = buildFeedingForm(entry);
+  } else if (entry.kind === 'dejection') {
+    fieldsHTML = buildDejectionForm(entry);
+  } else if (entry.kind === 'weight') {
+    fieldsHTML = buildWeightForm(entry);
+  }
+
+  $editSheet.innerHTML = `
+    <div class="edit-modal-title">
+      <span class="edit-icon">${icon}</span>
+      Edit ${label}
+    </div>
+    ${fieldsHTML}
+    <div class="form-group">
+      <label for="edit-notes">Notes</label>
+      <input type="text" id="edit-notes" value="${escAttr(entry.notes || '')}" placeholder="Optional notes">
+    </div>
+    <div class="form-group">
+      <label for="edit-time">Time</label>
+      <input type="datetime-local" id="edit-time" value="${toDatetimeLocal(entry.timestamp)}">
+    </div>
+    <div class="edit-actions">
+      <button id="edit-delete" class="btn-danger">Delete</button>
+      <button id="edit-save" class="btn-primary">Save</button>
+    </div>
+  `;
+
+  // Wire up save and delete
+  $editSheet.querySelector('#edit-save').addEventListener('click', () => {
+    handleEditSave(entry);
+  });
+  $editSheet.querySelector('#edit-delete').addEventListener('click', () => {
+    handleEditDelete(entry);
   });
 
-  $editDelete.addEventListener('click', () => {
-    const id = parseInt($editId.value);
-    const kind = $editKind.value;
+  $editModal.classList.remove('hidden');
+}
 
-    if (kind === 'feeding') {
-      tracker.deleteFeeding(id);
-    } else if (kind === 'dejection') {
-      tracker.deleteDejection(id);
-    } else if (kind === 'weight') {
-      tracker.deleteWeight(id);
+function escAttr(s) {
+  return s.replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+// --- Feeding edit form ---
+
+function buildFeedingForm(entry) {
+  const subtypes = ['breast-left', 'breast-right', 'bottle', 'solid'];
+  const options = subtypes.map(s =>
+    `<option value="${s}" ${s === entry.subtype ? 'selected' : ''}>${LABELS[s]}</option>`
+  ).join('');
+
+  const amountVal = entry.amount_ml != null ? entry.amount_ml : '';
+  const durVal = entry.duration_minutes != null ? entry.duration_minutes : '';
+
+  return `
+    <div class="form-group">
+      <label for="edit-subtype">Type</label>
+      <select id="edit-subtype">${options}</select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="edit-amount">Amount (ml)</label>
+        <input type="number" id="edit-amount" min="0" step="5" placeholder="ml" value="${amountVal}">
+      </div>
+      <div class="form-group">
+        <label for="edit-duration">Duration (min)</label>
+        <input type="number" id="edit-duration" min="0" placeholder="min" value="${durVal}">
+      </div>
+    </div>
+  `;
+}
+
+// --- Dejection edit form ---
+
+function buildDejectionForm(entry) {
+  const subtypes = ['urine', 'poop'];
+  const options = subtypes.map(s =>
+    `<option value="${s}" ${s === entry.subtype ? 'selected' : ''}>${LABELS[s]}</option>`
+  ).join('');
+
+  return `
+    <div class="form-group">
+      <label for="edit-subtype">Type</label>
+      <select id="edit-subtype">${options}</select>
+    </div>
+  `;
+}
+
+// --- Weight edit form ---
+
+function buildWeightForm(entry) {
+  const kgVal = entry.weight_kg != null ? entry.weight_kg : '';
+  return `
+    <div class="form-group">
+      <label for="edit-weight-kg">Weight (kg)</label>
+      <input type="number" id="edit-weight-kg" min="0.1" step="0.1" placeholder="kg" value="${kgVal}">
+    </div>
+  `;
+}
+
+// --- Edit save handler ---
+
+function handleEditSave(entry) {
+  const notes = $editSheet.querySelector('#edit-notes').value.trim() || undefined;
+  const timestamp = $editSheet.querySelector('#edit-time').value + ':00';
+  const id = entry.id;
+
+  try {
+    if (entry.kind === 'feeding') {
+      const subtype = $editSheet.querySelector('#edit-subtype').value;
+      const amountEl = $editSheet.querySelector('#edit-amount');
+      const durEl = $editSheet.querySelector('#edit-duration');
+      const amount = amountEl.value ? parseFloat(amountEl.value) : undefined;
+      const duration = durEl.value ? parseInt(durEl.value) : undefined;
+      tracker.updateFeeding(id, subtype, amount, duration, notes, timestamp);
+    } else if (entry.kind === 'dejection') {
+      const subtype = $editSheet.querySelector('#edit-subtype').value;
+      tracker.updateDejection(id, subtype, notes, timestamp);
+    } else if (entry.kind === 'weight') {
+      const kg = parseFloat($editSheet.querySelector('#edit-weight-kg').value);
+      tracker.updateWeight(id, kg, notes, timestamp);
     }
     save();
     hideEditModal();
     render();
-  });
+  } catch (err) {
+    console.error('Failed to update entry:', err);
+  }
+}
+
+// --- Edit delete handler ---
+
+function handleEditDelete(entry) {
+  try {
+    if (entry.kind === 'feeding') {
+      tracker.deleteFeeding(entry.id);
+    } else if (entry.kind === 'dejection') {
+      tracker.deleteDejection(entry.id);
+    } else if (entry.kind === 'weight') {
+      tracker.deleteWeight(entry.id);
+    }
+    save();
+    hideEditModal();
+    render();
+  } catch (err) {
+    console.error('Failed to delete entry:', err);
+  }
 }
 
 // --- Report View ---
@@ -616,7 +669,7 @@ function getReportData() {
   const end = new Date();
   end.setDate(end.getDate() + 1);
   const start = new Date();
-  start.setDate(start.getDate() - 13); // last 14 days
+  start.setDate(start.getDate() - 13);
   try {
     return JSON.parse(tracker.getReport(undefined, dateStr(start), dateStr(end)));
   } catch {
@@ -640,12 +693,26 @@ function drawChart(data, values) {
   const canvas = $reportChart;
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
-  const w = canvas.parentElement.clientWidth;
+
+  // Fixed bar width for scrollability
+  const barW = 28;
+  const gap = 10;
+  const padLeft = 16;
+  const padRight = 16;
+  const padTop = 22;
+  const padBottom = 28;
+
+  const totalW = padLeft + padRight + data.length * (barW + gap) - gap;
+  const containerW = canvas.parentElement.parentElement.clientWidth;
+  const w = Math.max(totalW, containerW);
   const h = 200;
+
+  // Set canvas to computed width so it scrolls
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   canvas.style.width = w + 'px';
   canvas.style.height = h + 'px';
+  canvas.parentElement.style.width = w + 'px';
   ctx.scale(dpr, dpr);
 
   ctx.clearRect(0, 0, w, h);
@@ -653,14 +720,7 @@ function drawChart(data, values) {
   const numericValues = values.map(v => (v == null ? 0 : v));
   const maxVal = Math.max(...numericValues, 1);
 
-  const padLeft = 10;
-  const padRight = 10;
-  const padTop = 20;
-  const padBottom = 30;
-  const chartW = w - padLeft - padRight;
   const chartH = h - padTop - padBottom;
-  const barW = Math.max(4, (chartW / data.length) - 4);
-  const gap = (chartW - barW * data.length) / (data.length + 1);
 
   // Grid lines
   ctx.strokeStyle = '#eee';
@@ -673,17 +733,17 @@ function drawChart(data, values) {
     ctx.stroke();
   }
 
-  // Bars
   const isWeight = currentMetric === 'weight_kg';
 
+  // Bars
   data.forEach((day, i) => {
     const val = numericValues[i];
-    const x = padLeft + gap + i * (barW + gap);
+    const x = padLeft + i * (barW + gap);
     const barH = maxVal > 0 ? (val / maxVal) * chartH : 0;
     const y = padTop + chartH - barH;
 
     if (isWeight && values[i] == null) {
-      // No bar for null weight days
+      // no bar
     } else {
       ctx.fillStyle = val > 0 ? '#6c5ce7' : '#e0e0e0';
       ctx.beginPath();
@@ -692,22 +752,20 @@ function drawChart(data, values) {
     }
 
     // Date label
-    if (i % Math.ceil(data.length / 7) === 0 || i === data.length - 1) {
-      ctx.fillStyle = '#636e72';
-      ctx.font = '10px -apple-system, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(shortDate(day.date), x + barW / 2, h - 6);
-    }
+    ctx.fillStyle = '#636e72';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(shortDate(day.date), x + barW / 2, h - 6);
   });
 
-  // Value labels on top
+  // Value labels
   ctx.fillStyle = '#6c5ce7';
   ctx.font = 'bold 10px -apple-system, sans-serif';
   ctx.textAlign = 'center';
   data.forEach((day, i) => {
     const val = numericValues[i];
     if (val > 0) {
-      const x = padLeft + gap + i * (barW + gap) + barW / 2;
+      const x = padLeft + i * (barW + gap) + barW / 2;
       const barH = (val / maxVal) * chartH;
       const y = padTop + chartH - barH - 4;
       const label = isWeight ? val.toFixed(1) : String(Math.round(val));
@@ -727,7 +785,6 @@ function drawTable(data, values) {
     weight_kg: ' kg',
   }[currentMetric] || '';
 
-  // Show most recent first
   const reversed = [...data].reverse();
   const reversedValues = [...values].reverse();
 

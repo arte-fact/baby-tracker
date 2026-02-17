@@ -66,9 +66,11 @@
         <button class="metric-btn" data-metric="weight_kg">Weight</button>
       </div>
 
-      <!-- Chart -->
-      <div class="report-chart-wrap">
-        <canvas id="report-chart" width="480" height="260"></canvas>
+      <!-- Chart (scrollable) -->
+      <div class="report-chart-scroll">
+        <div class="report-chart-inner">
+          <canvas id="report-chart" height="220"></canvas>
+        </div>
       </div>
 
       <!-- Per-day table -->
@@ -139,50 +141,10 @@
       </div>
     </div>
 
-    <!-- Edit Modal -->
+    <!-- Edit Modal (content built dynamically per event type) -->
     <div id="edit-modal" class="edit-modal hidden">
       <div class="edit-modal-backdrop"></div>
-      <div class="edit-modal-sheet">
-        <div class="edit-modal-title">Edit Entry</div>
-        <input type="hidden" id="edit-id">
-        <input type="hidden" id="edit-kind">
-
-        <div class="form-group">
-          <label for="edit-subtype">Type</label>
-          <select id="edit-subtype"></select>
-        </div>
-
-        <div class="form-row" id="edit-feeding-fields">
-          <div class="form-group">
-            <label for="edit-amount">Amount (ml)</label>
-            <input type="number" id="edit-amount" min="0" step="5" placeholder="ml">
-          </div>
-          <div class="form-group">
-            <label for="edit-duration">Duration (min)</label>
-            <input type="number" id="edit-duration" min="0" placeholder="min">
-          </div>
-        </div>
-
-        <div id="edit-weight-field" class="form-group">
-          <label for="edit-weight">Weight (kg)</label>
-          <input type="number" id="edit-weight" min="0" step="0.1" placeholder="kg">
-        </div>
-
-        <div class="form-group">
-          <label for="edit-notes">Notes</label>
-          <input type="text" id="edit-notes" placeholder="Optional notes">
-        </div>
-
-        <div class="form-group">
-          <label for="edit-time">Time</label>
-          <input type="datetime-local" id="edit-time">
-        </div>
-
-        <div class="edit-actions">
-          <button id="edit-delete" class="btn-danger">Delete</button>
-          <button id="edit-save" class="btn-primary">Save</button>
-        </div>
-      </div>
+      <div class="edit-modal-sheet" id="edit-sheet"></div>
     </div>
 
     <!-- FAB -->

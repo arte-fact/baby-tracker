@@ -44,7 +44,7 @@ impl FeedingType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Feeding {
-    pub id: u64,
+    pub id: u32,
     pub baby_name: String,
     pub feeding_type: FeedingType,
     pub amount_ml: Option<f64>,
@@ -117,7 +117,7 @@ impl DejectionType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Dejection {
-    pub id: u64,
+    pub id: u32,
     pub baby_name: String,
     pub dejection_type: DejectionType,
     pub notes: Option<String>,
@@ -148,7 +148,7 @@ impl Dejection {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Weight {
-    pub id: u64,
+    pub id: u32,
     pub baby_name: String,
     pub weight_kg: f64,
     pub notes: Option<String>,
@@ -182,7 +182,7 @@ impl Weight {
 
 #[derive(Debug, Serialize)]
 pub struct TimelineEntry {
-    pub id: u64,
+    pub id: u32,
     pub kind: &'static str,
     pub baby_name: String,
     pub subtype: String,

@@ -454,6 +454,12 @@ header {
   color: var(--text);
 }
 
+.edit-modal-title .edit-icon {
+  font-size: 1.6rem;
+  display: block;
+  margin-bottom: 4px;
+}
+
 .form-group {
   margin-bottom: 14px;
 }
@@ -612,15 +618,22 @@ header {
   color: var(--primary);
 }
 
-.report-chart-wrap {
-  padding: 16px;
+.report-chart-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   background: var(--card);
   flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.report-chart-inner {
+  min-width: 100%;
+  padding: 16px 0;
 }
 
 #report-chart {
-  width: 100%;
-  height: auto;
+  display: block;
+  height: 200px;
 }
 
 .report-table {
