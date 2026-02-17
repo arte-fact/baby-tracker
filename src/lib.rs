@@ -6,8 +6,6 @@ use wasm_bindgen::prelude::*;
 
 use tracker::Tracker;
 
-/// WASM-exported wrapper around Tracker.
-/// All business logic lives in tracker.rs (testable on native).
 #[wasm_bindgen]
 pub struct BabyTracker {
     inner: Tracker,
@@ -33,6 +31,8 @@ impl BabyTracker {
         self.inner.export_data()
     }
 
+    // --- Feeding ---
+
     #[wasm_bindgen(js_name = addFeeding)]
     pub fn add_feeding(
         &mut self,
@@ -48,27 +48,73 @@ impl BabyTracker {
             .map_err(|e| JsError::new(&e))
     }
 
+    #[wasm_bindgen(js_name = updateFeeding)]
+    pub fn update_feeding(
+        &mut self,
+        id: u64,
+        feeding_type: &str,
+        amount_ml: Option<f64>,
+        duration_minutes: Option<u32>,
+        notes: Option<String>,
+        timestamp: &str,
+    ) -> Result<bool, JsError> {
+        self.inner
+            .update_feeding(id, feeding_type, amount_ml, duration_minutes, notes, timestamp)
+            .map_err(|e| JsError::new(&e))
+    }
+
     #[wasm_bindgen(js_name = deleteFeeding)]
     pub fn delete_feeding(&mut self, id: u64) -> bool {
         self.inner.delete_feeding(id)
     }
 
-    #[wasm_bindgen(js_name = listFeedings)]
-    pub fn list_feedings(&self, baby_name: Option<String>, limit: usize) -> String {
-        self.inner.list_feedings(baby_name.as_deref(), limit)
+    // --- Dejection ---
+
+    #[wasm_bindgen(js_name = addDejection)]
+    pub fn add_dejection(
+        &mut self,
+        baby_name: &str,
+        dejection_type: &str,
+        notes: Option<String>,
+        timestamp: &str,
+    ) -> Result<u64, JsError> {
+        self.inner
+            .add_dejection(baby_name, dejection_type, notes, timestamp)
+            .map_err(|e| JsError::new(&e))
     }
 
-    /// List feedings for a single day. `date` is "YYYY-MM-DD". Returns JSON array, chronological.
-    #[wasm_bindgen(js_name = listFeedingsForDay)]
-    pub fn list_feedings_for_day(
+    #[wasm_bindgen(js_name = updateDejection)]
+    pub fn update_dejection(
+        &mut self,
+        id: u64,
+        dejection_type: &str,
+        notes: Option<String>,
+        timestamp: &str,
+    ) -> Result<bool, JsError> {
+        self.inner
+            .update_dejection(id, dejection_type, notes, timestamp)
+            .map_err(|e| JsError::new(&e))
+    }
+
+    #[wasm_bindgen(js_name = deleteDejection)]
+    pub fn delete_dejection(&mut self, id: u64) -> bool {
+        self.inner.delete_dejection(id)
+    }
+
+    // --- Timeline ---
+
+    #[wasm_bindgen(js_name = timelineForDay)]
+    pub fn timeline_for_day(
         &self,
         baby_name: Option<String>,
         date: &str,
     ) -> Result<String, JsError> {
         self.inner
-            .list_feedings_for_day(baby_name.as_deref(), date)
+            .timeline_for_day(baby_name.as_deref(), date)
             .map_err(|e| JsError::new(&e))
     }
+
+    // --- Summary ---
 
     #[wasm_bindgen(js_name = getSummary)]
     pub fn get_summary(

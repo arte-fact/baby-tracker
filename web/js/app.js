@@ -63,7 +63,7 @@ function isYesterday(d) {
   const y = new Date();
   y.setDate(y.getDate() - 1);
   return d.getFullYear() === y.getFullYear() &&
-    d.getMonth() === y.getMonth() &&
+    y.getMonth() === d.getMonth() &&
     d.getDate() === y.getDate();
 }
 
@@ -89,19 +89,36 @@ function toISOTimestamp(date) {
   return `${y}-${mo}-${d}T${h}:${mi}:${s}`;
 }
 
-const TYPE_ICONS = {
+function toDatetimeLocal(isoStr) {
+  const d = new Date(isoStr);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${y}-${mo}-${day}T${h}:${mi}`;
+}
+
+const ICONS = {
   'breast-left': '\u{1F931}',
   'breast-right': '\u{1F931}',
   'bottle': '\u{1F37C}',
   'solid': '\u{1F963}',
+  'urine': '\u{1F4A7}',
+  'poop': '\u{1F4A9}',
 };
 
-const TYPE_LABELS = {
+const LABELS = {
   'breast-left': 'Breast (Left)',
   'breast-right': 'Breast (Right)',
   'bottle': 'Bottle',
   'solid': 'Solid',
+  'urine': 'Pee',
+  'poop': 'Poop',
 };
+
+const FEEDING_SUBTYPES = ['breast-left', 'breast-right', 'bottle', 'solid'];
+const DEJECTION_SUBTYPES = ['urine', 'poop'];
 
 // --- Day Navigation ---
 
@@ -170,77 +187,78 @@ function render() {
   renderDaySummary();
 }
 
-function renderTimeline() {
+function getTimeline() {
   const ds = dateStr(currentDate);
-  let feedings;
   try {
-    feedings = JSON.parse(tracker.listFeedingsForDay(undefined, ds));
+    return JSON.parse(tracker.timelineForDay(undefined, ds));
   } catch {
-    feedings = [];
+    return [];
   }
+}
 
-  if (feedings.length === 0) {
-    $timeline.innerHTML = '<div class="empty-state">No feedings this day</div>';
+function renderTimeline() {
+  const entries = getTimeline();
+
+  if (entries.length === 0) {
+    $timeline.innerHTML = '<div class="empty-state">No entries today</div>';
     return;
   }
 
-  $timeline.innerHTML = feedings.map(f => {
-    const icon = TYPE_ICONS[f.feeding_type] || '';
-    const label = TYPE_LABELS[f.feeding_type] || f.feeding_type;
+  $timeline.innerHTML = entries.map(e => {
+    const icon = ICONS[e.subtype] || '';
+    const label = LABELS[e.subtype] || e.subtype;
     const meta = [];
-    if (f.amount_ml != null) meta.push(`${f.amount_ml} ml`);
-    if (f.duration_minutes != null) meta.push(`${f.duration_minutes} min`);
-    if (f.notes) meta.push(f.notes);
+    if (e.amount_ml != null) meta.push(`${e.amount_ml} ml`);
+    if (e.duration_minutes != null) meta.push(`${e.duration_minutes} min`);
+    if (e.notes) meta.push(e.notes);
 
     return `
-      <div class="tl-entry" data-id="${f.id}">
+      <div class="tl-entry" data-id="${e.id}" data-kind="${e.kind}">
         <div class="tl-dot">${icon}</div>
         <div class="tl-body">
           <div class="tl-info">
             <div class="tl-type">${label}</div>
             ${meta.length ? `<div class="tl-meta">${meta.join(' \u00b7 ')}</div>` : ''}
           </div>
-          <div class="tl-time">${formatTime(f.timestamp)}</div>
-          <button class="tl-delete" title="Delete">\u00d7</button>
+          <div class="tl-time">${formatTime(e.timestamp)}</div>
         </div>
       </div>
     `;
   }).join('');
 
-  // Delete handlers
-  $timeline.querySelectorAll('.tl-delete').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const entry = btn.closest('.tl-entry');
-      const id = parseInt(entry.dataset.id);
-      tracker.deleteFeeding(id);
-      save();
-      render();
+  // Tap entry to edit
+  $timeline.querySelectorAll('.tl-entry').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = parseInt(el.dataset.id);
+      const kind = el.dataset.kind;
+      const entry = entries.find(e => e.id === id);
+      if (entry) openEditModal(entry);
     });
   });
 }
 
 function renderDaySummary() {
   const ds = dateStr(currentDate);
-  let feedings;
+  let summary;
   try {
-    feedings = JSON.parse(tracker.listFeedingsForDay(undefined, ds));
+    summary = JSON.parse(tracker.getSummary(undefined, `${ds}T00:00:00`));
   } catch {
-    feedings = [];
+    summary = { total_feedings: 0, total_ml: 0, total_minutes: 0, total_urine: 0, total_poop: 0 };
   }
 
-  const count = feedings.length;
-  const totalMl = feedings.reduce((s, f) => s + (f.amount_ml || 0), 0);
-  const totalMin = feedings.reduce((s, f) => s + (f.duration_minutes || 0), 0);
+  const { total_feedings, total_ml, total_minutes, total_urine, total_poop } = summary;
+  const hasAnything = total_feedings + total_urine + total_poop > 0;
 
-  if (count === 0) {
+  if (!hasAnything) {
     $daySummary.innerHTML = '';
     return;
   }
 
   $daySummary.innerHTML = `
-    <div class="day-stat"><span class="val">${count}</span><br>feedings</div>
-    <div class="day-stat"><span class="val">${totalMl > 0 ? Math.round(totalMl) + ' ml' : '\u2014'}</span><br>volume</div>
-    <div class="day-stat"><span class="val">${totalMin > 0 ? totalMin + ' min' : '\u2014'}</span><br>nursing</div>
+    <div class="day-stat"><span class="val">${total_feedings}</span><br>feedings</div>
+    <div class="day-stat"><span class="val">${total_ml > 0 ? Math.round(total_ml) + ' ml' : '\u2014'}</span><br>volume</div>
+    <div class="day-stat"><span class="val">${total_minutes > 0 ? total_minutes + ' min' : '\u2014'}</span><br>nursing</div>
+    <div class="day-stat"><span class="val">${total_urine}\u{1F4A7} ${total_poop}\u{1F4A9}</span><br>diapers</div>
   `;
 }
 
@@ -336,10 +354,118 @@ function setupTypePicker() {
   // Type buttons
   $typePicker.querySelectorAll('.type-pick-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      const kind = btn.dataset.kind;
       const type = btn.dataset.type;
       hideTypePicker();
-      startFeeding(type);
+
+      if (kind === 'dejection') {
+        // Dejections are instant - save immediately
+        const name = getBabyName();
+        const timestamp = toISOTimestamp(new Date());
+        try {
+          tracker.addDejection(name, type, undefined, timestamp);
+          save();
+          // Navigate to today and re-render
+          currentDate = new Date();
+          resetToStartOfDay(currentDate);
+          render();
+        } catch (err) {
+          console.error('Failed to save dejection:', err);
+        }
+      } else {
+        // Feedings use the timer
+        startFeeding(type);
+      }
     });
+  });
+}
+
+// --- Edit Modal ---
+
+const $editModal = document.getElementById('edit-modal');
+const $editId = document.getElementById('edit-id');
+const $editKind = document.getElementById('edit-kind');
+const $editSubtype = document.getElementById('edit-subtype');
+const $editAmount = document.getElementById('edit-amount');
+const $editDuration = document.getElementById('edit-duration');
+const $editNotes = document.getElementById('edit-notes');
+const $editTime = document.getElementById('edit-time');
+const $editFeedingFields = document.getElementById('edit-feeding-fields');
+const $editDelete = document.getElementById('edit-delete');
+const $editSave = document.getElementById('edit-save');
+
+function openEditModal(entry) {
+  $editId.value = entry.id;
+  $editKind.value = entry.kind;
+
+  // Populate subtype options
+  const subtypes = entry.kind === 'feeding' ? FEEDING_SUBTYPES : DEJECTION_SUBTYPES;
+  $editSubtype.innerHTML = subtypes.map(s =>
+    `<option value="${s}" ${s === entry.subtype ? 'selected' : ''}>${LABELS[s]}</option>`
+  ).join('');
+
+  // Show/hide feeding-specific fields
+  if (entry.kind === 'feeding') {
+    $editFeedingFields.classList.remove('hidden');
+    $editAmount.value = entry.amount_ml != null ? entry.amount_ml : '';
+    $editDuration.value = entry.duration_minutes != null ? entry.duration_minutes : '';
+  } else {
+    $editFeedingFields.classList.add('hidden');
+    $editAmount.value = '';
+    $editDuration.value = '';
+  }
+
+  $editNotes.value = entry.notes || '';
+  $editTime.value = toDatetimeLocal(entry.timestamp);
+
+  $editModal.classList.remove('hidden');
+}
+
+function hideEditModal() {
+  $editModal.classList.add('hidden');
+}
+
+function setupEditModal() {
+  // Backdrop dismiss
+  $editModal.querySelector('.edit-modal-backdrop').addEventListener('click', hideEditModal);
+
+  // Save
+  $editSave.addEventListener('click', () => {
+    const id = parseInt($editId.value);
+    const kind = $editKind.value;
+    const subtype = $editSubtype.value;
+    const notes = $editNotes.value.trim() || undefined;
+    const timestamp = $editTime.value + ':00'; // add seconds
+
+    try {
+      if (kind === 'feeding') {
+        const amount = $editAmount.value ? parseFloat($editAmount.value) : undefined;
+        const duration = $editDuration.value ? parseInt($editDuration.value) : undefined;
+        tracker.updateFeeding(id, subtype, amount, duration, notes, timestamp);
+      } else {
+        tracker.updateDejection(id, subtype, notes, timestamp);
+      }
+      save();
+      hideEditModal();
+      render();
+    } catch (err) {
+      console.error('Failed to update entry:', err);
+    }
+  });
+
+  // Delete
+  $editDelete.addEventListener('click', () => {
+    const id = parseInt($editId.value);
+    const kind = $editKind.value;
+
+    if (kind === 'feeding') {
+      tracker.deleteFeeding(id);
+    } else {
+      tracker.deleteDejection(id);
+    }
+    save();
+    hideEditModal();
+    render();
   });
 }
 
@@ -390,6 +516,7 @@ async function main() {
   setupSwipe();
   setupFAB();
   setupTypePicker();
+  setupEditModal();
   setupNamePrompt();
 
   $btnPrev.addEventListener('click', () => goDay(-1));
