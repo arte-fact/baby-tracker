@@ -3,6 +3,8 @@ use std::fmt;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
+// --- FeedingType ---
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FeedingType {
@@ -37,6 +39,8 @@ impl FeedingType {
         }
     }
 }
+
+// --- Feeding ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Feeding {
@@ -75,6 +79,116 @@ impl Feeding {
             notes: notes.filter(|n| !n.trim().is_empty()),
             timestamp,
         })
+    }
+}
+
+// --- DejectionType ---
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DejectionType {
+    Urine,
+    Poop,
+}
+
+impl fmt::Display for DejectionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DejectionType::Urine => write!(f, "Urine"),
+            DejectionType::Poop => write!(f, "Poop"),
+        }
+    }
+}
+
+impl DejectionType {
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s.to_lowercase().as_str() {
+            "urine" | "pee" | "u" => Ok(DejectionType::Urine),
+            "poop" | "p" => Ok(DejectionType::Poop),
+            _ => Err(format!(
+                "Unknown dejection type: '{}'. Use: urine (pee/u), poop (p)",
+                s
+            )),
+        }
+    }
+}
+
+// --- Dejection ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Dejection {
+    pub id: u64,
+    pub baby_name: String,
+    pub dejection_type: DejectionType,
+    pub notes: Option<String>,
+    pub timestamp: NaiveDateTime,
+}
+
+impl Dejection {
+    pub fn new(
+        baby_name: String,
+        dejection_type: DejectionType,
+        notes: Option<String>,
+        timestamp: NaiveDateTime,
+    ) -> Result<Self, String> {
+        if baby_name.trim().is_empty() {
+            return Err("Baby name cannot be empty".to_string());
+        }
+        Ok(Dejection {
+            id: 0,
+            baby_name: baby_name.trim().to_string(),
+            dejection_type,
+            notes: notes.filter(|n| !n.trim().is_empty()),
+            timestamp,
+        })
+    }
+}
+
+// --- Unified timeline entry for day view ---
+
+#[derive(Debug, Serialize)]
+pub struct TimelineEntry {
+    pub id: u64,
+    pub kind: &'static str,
+    pub baby_name: String,
+    pub subtype: String,
+    pub amount_ml: Option<f64>,
+    pub duration_minutes: Option<u32>,
+    pub notes: Option<String>,
+    pub timestamp: NaiveDateTime,
+}
+
+impl TimelineEntry {
+    pub fn from_feeding(f: &Feeding) -> Self {
+        TimelineEntry {
+            id: f.id,
+            kind: "feeding",
+            baby_name: f.baby_name.clone(),
+            subtype: serde_json::to_string(&f.feeding_type)
+                .unwrap_or_default()
+                .trim_matches('"')
+                .to_string(),
+            amount_ml: f.amount_ml,
+            duration_minutes: f.duration_minutes,
+            notes: f.notes.clone(),
+            timestamp: f.timestamp,
+        }
+    }
+
+    pub fn from_dejection(d: &Dejection) -> Self {
+        TimelineEntry {
+            id: d.id,
+            kind: "dejection",
+            baby_name: d.baby_name.clone(),
+            subtype: serde_json::to_string(&d.dejection_type)
+                .unwrap_or_default()
+                .trim_matches('"')
+                .to_string(),
+            amount_ml: None,
+            duration_minutes: None,
+            notes: d.notes.clone(),
+            timestamp: d.timestamp,
+        }
     }
 }
 
@@ -126,8 +240,6 @@ mod tests {
         assert_eq!(FeedingType::Bottle.to_string(), "Bottle");
     }
 
-    // --- FeedingType serde round-trip ---
-
     #[test]
     fn feeding_type_serde_roundtrip() {
         let ft = FeedingType::BreastLeft;
@@ -152,7 +264,7 @@ mod tests {
         .unwrap();
         assert_eq!(f.baby_name, "Emma");
         assert_eq!(f.amount_ml, Some(120.0));
-        assert_eq!(f.id, 0); // unassigned
+        assert_eq!(f.id, 0);
     }
 
     #[test]
@@ -163,16 +275,13 @@ mod tests {
 
     #[test]
     fn feeding_new_empty_name_rejected() {
-        let r = Feeding::new("".to_string(), FeedingType::Bottle, None, None, None, ts(8, 0));
-        assert!(r.is_err());
-        let r = Feeding::new("   ".to_string(), FeedingType::Bottle, None, None, None, ts(8, 0));
-        assert!(r.is_err());
+        assert!(Feeding::new("".to_string(), FeedingType::Bottle, None, None, None, ts(8, 0)).is_err());
+        assert!(Feeding::new("   ".to_string(), FeedingType::Bottle, None, None, None, ts(8, 0)).is_err());
     }
 
     #[test]
     fn feeding_new_negative_amount_rejected() {
-        let r = Feeding::new("Emma".to_string(), FeedingType::Bottle, Some(-10.0), None, None, ts(8, 0));
-        assert!(r.is_err());
+        assert!(Feeding::new("Emma".to_string(), FeedingType::Bottle, Some(-10.0), None, None, ts(8, 0)).is_err());
     }
 
     #[test]
@@ -181,24 +290,93 @@ mod tests {
         assert_eq!(f.notes, None);
     }
 
-    // --- Feeding serde round-trip ---
-
     #[test]
     fn feeding_serde_roundtrip() {
-        let f = Feeding::new(
-            "Emma".to_string(),
-            FeedingType::BreastRight,
-            None,
-            Some(15),
-            Some("Good latch".to_string()),
-            ts(14, 30),
-        )
-        .unwrap();
+        let f = Feeding::new("Emma".to_string(), FeedingType::BreastRight, None, Some(15), Some("Good latch".to_string()), ts(14, 30)).unwrap();
         let json = serde_json::to_string(&f).unwrap();
         let parsed: Feeding = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.baby_name, f.baby_name);
         assert_eq!(parsed.feeding_type, f.feeding_type);
         assert_eq!(parsed.duration_minutes, f.duration_minutes);
         assert_eq!(parsed.timestamp, f.timestamp);
+    }
+
+    // --- DejectionType parsing ---
+
+    #[test]
+    fn parse_dejection_type_full_names() {
+        assert_eq!(DejectionType::parse("urine").unwrap(), DejectionType::Urine);
+        assert_eq!(DejectionType::parse("poop").unwrap(), DejectionType::Poop);
+    }
+
+    #[test]
+    fn parse_dejection_type_shortcuts() {
+        assert_eq!(DejectionType::parse("pee").unwrap(), DejectionType::Urine);
+        assert_eq!(DejectionType::parse("u").unwrap(), DejectionType::Urine);
+        assert_eq!(DejectionType::parse("p").unwrap(), DejectionType::Poop);
+    }
+
+    #[test]
+    fn parse_dejection_type_case_insensitive() {
+        assert_eq!(DejectionType::parse("URINE").unwrap(), DejectionType::Urine);
+        assert_eq!(DejectionType::parse("Poop").unwrap(), DejectionType::Poop);
+    }
+
+    #[test]
+    fn parse_dejection_type_invalid() {
+        assert!(DejectionType::parse("vomit").is_err());
+        assert!(DejectionType::parse("").is_err());
+    }
+
+    #[test]
+    fn dejection_type_serde_roundtrip() {
+        let dt = DejectionType::Poop;
+        let json = serde_json::to_string(&dt).unwrap();
+        assert_eq!(json, "\"poop\"");
+        let parsed: DejectionType = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, dt);
+    }
+
+    // --- Dejection construction ---
+
+    #[test]
+    fn dejection_new_valid() {
+        let d = Dejection::new("Emma".to_string(), DejectionType::Poop, Some("Soft".to_string()), ts(10, 0)).unwrap();
+        assert_eq!(d.baby_name, "Emma");
+        assert_eq!(d.dejection_type, DejectionType::Poop);
+        assert_eq!(d.notes, Some("Soft".to_string()));
+    }
+
+    #[test]
+    fn dejection_new_empty_name_rejected() {
+        assert!(Dejection::new("".to_string(), DejectionType::Urine, None, ts(10, 0)).is_err());
+    }
+
+    #[test]
+    fn dejection_new_blank_notes_become_none() {
+        let d = Dejection::new("Emma".to_string(), DejectionType::Urine, Some("  ".to_string()), ts(10, 0)).unwrap();
+        assert_eq!(d.notes, None);
+    }
+
+    // --- TimelineEntry ---
+
+    #[test]
+    fn timeline_entry_from_feeding() {
+        let mut f = Feeding::new("Emma".to_string(), FeedingType::Bottle, Some(120.0), None, None, ts(8, 0)).unwrap();
+        f.id = 1;
+        let e = TimelineEntry::from_feeding(&f);
+        assert_eq!(e.kind, "feeding");
+        assert_eq!(e.subtype, "bottle");
+        assert_eq!(e.amount_ml, Some(120.0));
+    }
+
+    #[test]
+    fn timeline_entry_from_dejection() {
+        let mut d = Dejection::new("Emma".to_string(), DejectionType::Poop, None, ts(9, 0)).unwrap();
+        d.id = 2;
+        let e = TimelineEntry::from_dejection(&d);
+        assert_eq!(e.kind, "dejection");
+        assert_eq!(e.subtype, "poop");
+        assert_eq!(e.amount_ml, None);
     }
 }
