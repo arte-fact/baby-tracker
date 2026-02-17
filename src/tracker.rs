@@ -34,7 +34,7 @@ impl Tracker {
         duration_minutes: Option<u32>,
         notes: Option<String>,
         timestamp: &str,
-    ) -> Result<u64, String> {
+    ) -> Result<u32, String> {
         let ft = FeedingType::parse(feeding_type)?;
         let ts = parse_timestamp(timestamp)?;
         let feeding = Feeding::new(baby_name.to_string(), ft, amount_ml, duration_minutes, notes, ts)?;
@@ -43,7 +43,7 @@ impl Tracker {
 
     pub fn update_feeding(
         &mut self,
-        id: u64,
+        id: u32,
         feeding_type: &str,
         amount_ml: Option<f64>,
         duration_minutes: Option<u32>,
@@ -56,7 +56,7 @@ impl Tracker {
         Ok(self.store.update_feeding(id, updated))
     }
 
-    pub fn delete_feeding(&mut self, id: u64) -> bool {
+    pub fn delete_feeding(&mut self, id: u32) -> bool {
         self.store.delete_feeding(id)
     }
 
@@ -68,7 +68,7 @@ impl Tracker {
         dejection_type: &str,
         notes: Option<String>,
         timestamp: &str,
-    ) -> Result<u64, String> {
+    ) -> Result<u32, String> {
         let dt = DejectionType::parse(dejection_type)?;
         let ts = parse_timestamp(timestamp)?;
         let dejection = Dejection::new(baby_name.to_string(), dt, notes, ts)?;
@@ -77,7 +77,7 @@ impl Tracker {
 
     pub fn update_dejection(
         &mut self,
-        id: u64,
+        id: u32,
         dejection_type: &str,
         notes: Option<String>,
         timestamp: &str,
@@ -88,7 +88,7 @@ impl Tracker {
         Ok(self.store.update_dejection(id, updated))
     }
 
-    pub fn delete_dejection(&mut self, id: u64) -> bool {
+    pub fn delete_dejection(&mut self, id: u32) -> bool {
         self.store.delete_dejection(id)
     }
 
@@ -100,7 +100,7 @@ impl Tracker {
         weight_kg: f64,
         notes: Option<String>,
         timestamp: &str,
-    ) -> Result<u64, String> {
+    ) -> Result<u32, String> {
         let ts = parse_timestamp(timestamp)?;
         let weight = Weight::new(baby_name.to_string(), weight_kg, notes, ts)?;
         Ok(self.store.add_weight(weight))
@@ -108,7 +108,7 @@ impl Tracker {
 
     pub fn update_weight(
         &mut self,
-        id: u64,
+        id: u32,
         weight_kg: f64,
         notes: Option<String>,
         timestamp: &str,
@@ -118,7 +118,7 @@ impl Tracker {
         Ok(self.store.update_weight(id, updated))
     }
 
-    pub fn delete_weight(&mut self, id: u64) -> bool {
+    pub fn delete_weight(&mut self, id: u32) -> bool {
         self.store.delete_weight(id)
     }
 

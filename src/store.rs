@@ -10,7 +10,7 @@ pub struct Store {
     dejections: Vec<Dejection>,
     #[serde(default)]
     weights: Vec<Weight>,
-    next_id: u64,
+    next_id: u32,
 }
 
 impl Store {
@@ -33,7 +33,7 @@ impl Store {
 
     // --- Feeding CRUD ---
 
-    pub fn add_feeding(&mut self, mut feeding: Feeding) -> u64 {
+    pub fn add_feeding(&mut self, mut feeding: Feeding) -> u32 {
         feeding.id = self.next_id;
         self.next_id += 1;
         let id = feeding.id;
@@ -41,13 +41,13 @@ impl Store {
         id
     }
 
-    pub fn delete_feeding(&mut self, id: u64) -> bool {
+    pub fn delete_feeding(&mut self, id: u32) -> bool {
         let before = self.feedings.len();
         self.feedings.retain(|f| f.id != id);
         self.feedings.len() < before
     }
 
-    pub fn update_feeding(&mut self, id: u64, updated: Feeding) -> bool {
+    pub fn update_feeding(&mut self, id: u32, updated: Feeding) -> bool {
         if let Some(f) = self.feedings.iter_mut().find(|f| f.id == id) {
             f.feeding_type = updated.feeding_type;
             f.amount_ml = updated.amount_ml;
@@ -73,7 +73,7 @@ impl Store {
 
     // --- Dejection CRUD ---
 
-    pub fn add_dejection(&mut self, mut dejection: Dejection) -> u64 {
+    pub fn add_dejection(&mut self, mut dejection: Dejection) -> u32 {
         dejection.id = self.next_id;
         self.next_id += 1;
         let id = dejection.id;
@@ -81,13 +81,13 @@ impl Store {
         id
     }
 
-    pub fn delete_dejection(&mut self, id: u64) -> bool {
+    pub fn delete_dejection(&mut self, id: u32) -> bool {
         let before = self.dejections.len();
         self.dejections.retain(|d| d.id != id);
         self.dejections.len() < before
     }
 
-    pub fn update_dejection(&mut self, id: u64, updated: Dejection) -> bool {
+    pub fn update_dejection(&mut self, id: u32, updated: Dejection) -> bool {
         if let Some(d) = self.dejections.iter_mut().find(|d| d.id == id) {
             d.dejection_type = updated.dejection_type;
             d.notes = updated.notes;
@@ -100,7 +100,7 @@ impl Store {
 
     // --- Weight CRUD ---
 
-    pub fn add_weight(&mut self, mut weight: Weight) -> u64 {
+    pub fn add_weight(&mut self, mut weight: Weight) -> u32 {
         weight.id = self.next_id;
         self.next_id += 1;
         let id = weight.id;
@@ -108,13 +108,13 @@ impl Store {
         id
     }
 
-    pub fn delete_weight(&mut self, id: u64) -> bool {
+    pub fn delete_weight(&mut self, id: u32) -> bool {
         let before = self.weights.len();
         self.weights.retain(|w| w.id != id);
         self.weights.len() < before
     }
 
-    pub fn update_weight(&mut self, id: u64, updated: Weight) -> bool {
+    pub fn update_weight(&mut self, id: u32, updated: Weight) -> bool {
         if let Some(w) = self.weights.iter_mut().find(|w| w.id == id) {
             w.weight_kg = updated.weight_kg;
             w.notes = updated.notes;
